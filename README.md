@@ -8,6 +8,6 @@
 
 ### 方式 A：下载到本地再执行（推荐）
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/pengyuyanzu/Rule/dev/init.ssh" -o init.sh \
+curl -fsSL "https://raw.githubusercontent.com/pengyuyanzu/Rule/dev/init.sh" -o init.sh \
   && chmod +x init.sh \
   && sudo ./init.sh
