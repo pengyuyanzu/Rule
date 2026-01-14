@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# Script Name: SSH-Hardener-EventualityAbsolute.sh
-# Description: The "Eventuality Absolute" - Semantic Parsing & Path Normalization.
-# Version:     70.0 (Final Golden Master - The Engineering Peak)
-# Auditors:    Gemini, Claude, GPT-4 (The Supreme Consensus)
+# Script Name: SSH-Hardener-EventualityResilience.sh
+# Description: The "Eventuality Resilience" - Semantic Equivalence & Safe Ports.
+# Version:     71.0 (Final Golden Master - Assertion Logic Fixed)
+# Fixes:       Allows 'without-password' as valid alias for 'prohibit-password'.
+#              Warns heavily against using Port 25.
 # Status:      Production Critical (Score: 100/100)
-# Threat Model: Mitigates races, hijacking, process mismatch, and semantic ambiguity.
 # =============================================================================
 
 set -euo pipefail
@@ -62,7 +62,7 @@ cleanup() {
     if type rollback >/dev/null 2>&1; then rollback; fi
   fi
   
-  # 2. 清理敏感环境变量 (使用 : 避免 set -e 报错)
+  # 2. 清理敏感环境变量
   unset ENV_SSH_PORT ENV_TARGET_USER ENV_SSH_KEY 2>/dev/null || :
   
   # 3. 清理工作区和临时文件
@@ -93,49 +93,24 @@ check_v6_comment_support() {
     ip6tables -m comment -h >/dev/null 2>&1 && return 0 || return 1
 }
 
-# [New] 路径归一化：将相对路径转换为绝对规范路径
 normalize_path() {
     local path="$1"
     local base_dir="$2"
-    
-    # 如果是相对路径，拼接到 base_dir
-    if [[ "$path" != /* ]]; then
-        path="${base_dir}/${path}"
-    fi
-    
-    # 使用 readlink -m (canonicalize-missing) 获取规范路径
-    # 如果没有 readlink -m，回退到简单的字符串处理
-    if command -v readlink >/dev/null 2>&1; then
-        readlink -m "$path"
-    else
-        echo "$path" | sed 's|//|/|g' # 简单回退
-    fi
+    if [[ "$path" != /* ]]; then path="${base_dir}/${path}"; fi
+    if command -v readlink >/dev/null 2>&1; then readlink -m "$path"; else echo "$path" | sed 's|//|/|g'; fi
 }
 
-# [New] 语义级 Include 解析器
 extract_includes() {
     local conf_file="$1"
     local conf_dir
     conf_dir=$(dirname "$conf_file")
-    
-    # 逐行读取，忽略注释，提取 Include 关键字后的内容
     while read -r line; do
-        # 移除行首空格
         line="${line#"${line%%[![:space:]]*}"}"
-        # 忽略注释和空行
         if [[ "$line" == \#* ]] || [ -z "$line" ]; then continue; fi
-        
-        # 匹配 Include (不区分大小写)
         if echo "$line" | grep -qi "^Include[[:space:]]\+"; then
-            # 提取参数部分
             local args
             args=$(echo "$line" | sed -E 's/^[Ii][Nn][Cc][Ll][Uu][Dd][Ee][[:space:]]+//')
-            
-            # 遍历该行的每个 token (假设无带空格的路径，sshd_config 很少见)
-            for pat in $args; do
-                # 归一化路径
-                echo "$(normalize_path "$pat" "$conf_dir")"
-            done
+            for pat in $args; do echo "$(normalize_path "$pat" "$conf_dir")"; done
         fi
     done < "$conf_file"
 }
@@ -345,24 +320,21 @@ fi
 
 if [ ! -f "$MAIN_CONF" ]; then die "配置文件 $MAIN_CONF 不存在。"; fi
 
-# [Fix] 全域语义扫描：复用与去重
+# 全域语义扫描
 CONF_DIR=$(dirname "$MAIN_CONF")
 CONF_D="${CONF_DIR}/sshd_config.d" # 默认目标
 found_reuse_dir=""
 need_insert_include=1
 
-# 提取当前 Main Conf 中的所有 Include 目标
 existing_includes=$(extract_includes "$MAIN_CONF")
 
-# 1. 检查复用：是否存在指向某个目录的 *.conf Include
+# 1. 检查复用
 while IFS= read -r inc_path; do
     if [[ "$inc_path" == *'/*.conf' ]]; then
         dir_part=$(dirname "$inc_path")
         if [ -d "$dir_part" ]; then
-            # 记录第一个可用复用目录
             if [ -z "$found_reuse_dir" ]; then 
                 found_reuse_dir="$dir_part"
-                # 安全性检查：复用的目录必须安全
                 ensure_path_safety "$found_reuse_dir"
             fi
         fi
@@ -376,7 +348,7 @@ if [ -n "$found_reuse_dir" ]; then
     need_insert_include=0
 fi
 
-# 3. 语义去重：如果我们需要插入 Include，检查是否已经存在等价指令
+# 3. 语义去重
 if [ "$need_insert_include" -eq 1 ]; then
     target_include_path="$(normalize_path "${CONF_D}/*.conf" "$CONF_DIR")"
     while IFS= read -r inc_path; do
@@ -390,7 +362,7 @@ fi
 
 DROP_IN="${CONF_D}/${DROP_IN_NAME}"
 
-# 4. 冲突扫描 (在最终确定的 CONF_D 中)
+# 4. 冲突扫描
 if [ -d "$CONF_D" ]; then
     shopt -s nullglob
     conf_files=("$CONF_D"/*.conf)
@@ -438,10 +410,10 @@ if check_v6_comment_support; then HAS_V6_COMMENT=1; fi
 
 if [ "$HAS_V4_COMMENT" -eq 1 ]; then info "iptables 支持注释模块，启用精确管理。"; else warn "iptables 不支持注释模块，降级为普通模式。"; fi
 
-echo -e "${GREEN}=== SSH 配置安全向导 (v70.0 Eventuality Absolute) ===${NC}"
+echo -e "${GREEN}=== SSH 配置安全向导 (v71.0 Eventuality Resilience) ===${NC}"
 echo -e "目标用户: ${CYAN}$TARGET_USER${NC}"
 echo -e "目标配置: ${CYAN}$MAIN_CONF${NC}"
-log_sys "Starting SSH hardening v70.0 for user: $TARGET_USER on config: $MAIN_CONF"
+log_sys "Starting SSH hardening v71.0 for user: $TARGET_USER on config: $MAIN_CONF"
 
 TS="$(date +%s)"
 MAIN_BAK="${MAIN_CONF}.bak.${TS}"
@@ -532,7 +504,6 @@ step "环境安全审计"
 
 shopt -s nullglob 2>/dev/null || true
 
-# [Fix] 存在性守卫 + 路径安全检查
 if [ -d "$CONF_D" ]; then ensure_path_safety "$CONF_D"; fi
 
 match_files=""
@@ -577,6 +548,17 @@ while true; do
 
   [[ "$SSH_PORT" =~ ^[0-9]+$ ]] || { warn "必须是数字"; continue; }
   if [ "$SSH_PORT" -lt 1 ] || [ "$SSH_PORT" -gt 65535 ]; then warn "范围无效"; continue; fi
+  
+  # [Fix] 端口 25 阻断
+  if [ "$SSH_PORT" -eq 25 ]; then
+      warn "⚠️  警告：端口 25 通常用于 SMTP 邮件服务，且常被云厂商/ISP 封锁入站或出站流量。"
+      warn "使用此端口极可能导致无法连接。"
+      if [ "${OVERRIDE_NONINTERACTIVE:-0}" = "1" ]; then
+          die "非交互模式下拒绝使用高危端口 25。"
+      fi
+      read -r -p "你确定要使用端口 25 吗？(y/N) " confirm_25 || true
+      if [[ ! "$confirm_25" =~ ^[Yy]$ ]]; then continue; fi
+  fi
   
   if command -v semanage >/dev/null 2>&1; then
       quick_check_selinux_port "$SSH_PORT"
@@ -702,7 +684,7 @@ elif [ "$has_existing_key" -eq 0 ]; then die "无公钥，停止。"; fi
 # --- 5. 生成配置 ---
 step "应用 SSHD 配置"
 generate_secure_config() {
-  echo "# Generated by Secure-Init-EventualityAbsolute"
+  echo "# Generated by Secure-Init-EventualityResilience"
   echo "Port $SSH_PORT"
   echo "PermitRootLogin prohibit-password"
   echo "PasswordAuthentication no"
@@ -721,7 +703,6 @@ KEYS="Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|PermitEmp
 drop_in_created=1
 
 if [ "$need_insert_include" -eq 1 ]; then
-  # 如果需要插入新的 Include，使用 grep -F 固定字符串检测
   if ! grep -qiF "Include ${CONF_D}/*.conf" "$MAIN_CONF"; then
     info "添加 Include 指令 (顶部)..."
     tmp_main="${WORKSPACE}/main_with_include"
@@ -731,6 +712,23 @@ if [ "$need_insert_include" -eq 1 ]; then
 fi
 
 ensure_config_dir "$CONF_D"
+
+shopt -s nullglob
+conf_files=("$CONF_D"/*.conf)
+conflicts=()
+if [ ${#conf_files[@]} -gt 0 ]; then
+    for f in "${conf_files[@]}"; do
+        fname=$(basename "$f")
+        if [[ "$fname" == "$DROP_IN_NAME" ]]; then continue; fi
+        if [[ "$fname" > "$DROP_IN_NAME" ]]; then
+            conflicts+=("$f")
+        fi
+    done
+fi
+
+if [ ${#conflicts[@]} -gt 0 ]; then
+    die "检测到优先级更高的配置文件，脚本无法保证配置生效。冲突文件: ${conflicts[*]}"
+fi
 
 if [ -f "$DROP_IN" ]; then
     ensure_path_safety "$DROP_IN"
@@ -785,8 +783,13 @@ check_effective() {
 
 check_effective "passwordauthentication" "no"
 check_effective "pubkeyauthentication" "yes"
-check_effective "permitrootlogin" "prohibit-password"
 check_effective "permitemptypasswords" "no"
+
+# [Fix] 语义兼容: permitrootlogin 支持 prohibit-password 或 without-password
+p_root=$(echo "$EFFECTIVE_CONFIG" | grep -i "^permitrootlogin " | awk '{print $2}')
+if [ "$p_root" != "prohibit-password" ] && [ "$p_root" != "without-password" ]; then
+    die "安全断言失败: permitrootlogin 当前为 '$p_root'，期望为 'prohibit-password' 或 'without-password'。"
+fi
 
 if echo "$EFFECTIVE_CONFIG" | grep -q "kbdinteractiveauthentication"; then
     check_effective "kbdinteractiveauthentication" "no"
